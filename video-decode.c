@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <vulkan/vulkan.h>
@@ -7,9 +8,10 @@
 struct VideoDecode {
     VkInstance instance;
     VkPhysicalDevice physicalDevice;
+    uint32_t videoDecodeQueueIndex;
 };
 
-static VkInstance creteInstance(void)
+static bool creteInstance(struct VideoDecode *vd)
 {
     VkInstance instance = NULL;
 
@@ -34,14 +36,17 @@ static VkInstance creteInstance(void)
     VkResult result = vkCreateInstance(&createInfo, NULL, &instance);
     if (result != VK_SUCCESS) {
         printf("ERROR: Failed to create VkInstance\n");
-        return NULL;
+        return false;
     }
 
-    return instance;
+    vd->instance = instance;
+    return true;
 }
 
-static VkPhysicalDevice pickPhysicalDevice(struct VideoDecode *vd)
+static bool pickPhysicalDevice(struct VideoDecode *vd)
 {
+    assert(vd->instance);
+
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(vd->instance, &deviceCount, NULL);
     if (deviceCount == 0) {
@@ -65,32 +70,31 @@ static VkPhysicalDevice pickPhysicalDevice(struct VideoDecode *vd)
         for (uint32_t q = 0; q < queueFamilyCount; q++) {
             VkQueueFamilyProperties queueFamily = queueFamilies[q];
             if (queueFamily.queueFlags & VK_QUEUE_VIDEO_DECODE_BIT_KHR) {
-                return device;
+                vd->physicalDevice = device;
+                vd->videoDecodeQueueIndex = q;
+                return true;
             }
         }
     }
 
     printf("ERROR: Failed to find GPUs with VK_QUEUE_VIDEO_DECODE_BIT_KHR support\n");
-    return NULL;
+    return false;
 }
 
 static bool initVideoDecode(struct VideoDecode *vd)
 {
-    vd->instance = creteInstance();
-    if (!vd->instance) {
+    printf("Creating Vulkan instance...\n");
+    if (!creteInstance(vd)) {
         return false;
     }
 
-    vd->physicalDevice = pickPhysicalDevice(vd);
-    if (!vd->physicalDevice) {
-        goto cleanupInstance;
+    printf("Creating physical device...\n");
+    if (!pickPhysicalDevice(vd)) {
+        return false;
     }
 
+    printf("VideoDecode struct initialized successfully :)\n");
     return true;
-
-cleanupInstance:
-    vkDestroyInstance(vd->instance, NULL);
-    return false;
 }
 
 static void freeVideoDecode(struct VideoDecode *vd)
@@ -100,15 +104,17 @@ static void freeVideoDecode(struct VideoDecode *vd)
 
 int main(void)
 {
-    struct VideoDecode vd;
+    struct VideoDecode vd = {0};
+    int ret = 0;
 
     printf("Initializing VideoDecode struct\n");
     if (!initVideoDecode(&vd)) {
-        return -1;
+        printf("ERROR: Error initializing VideoDecode struct\n");
+        ret = -1;
     }
 
     printf("Destroying VideoDecode struct\n");
     freeVideoDecode(&vd);
 
-    return 0;
+    return ret;
 }
