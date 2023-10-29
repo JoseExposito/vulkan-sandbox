@@ -10,8 +10,8 @@
       "cwd": "${fileDirname}",
       "environment": [
         {
-          "name": "G_MESSAGES_DEBUG",
-          "value": "all"
+          "name": "RADV_PERFTEST",
+          "value": "video_decode"
         }
       ],
       "externalConsole": false,
