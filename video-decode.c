@@ -9,6 +9,8 @@ struct VideoDecode {
     VkInstance instance;
     VkPhysicalDevice physicalDevice;
     uint32_t videoDecodeQueueIndex;
+    VkDevice device;
+    VkQueue videoDecodeQueue;
 };
 
 static bool creteInstance(struct VideoDecode *vd)
@@ -81,6 +83,41 @@ static bool pickPhysicalDevice(struct VideoDecode *vd)
     return false;
 }
 
+static bool createLogicalDevice(struct VideoDecode *vd)
+{
+    assert(vd->instance);
+    assert(vd->physicalDevice);
+
+    float queuePriority = 1.0f;
+
+    VkDeviceQueueCreateInfo queueCreateInfo = {0};
+    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queueCreateInfo.queueFamilyIndex = vd->videoDecodeQueueIndex;
+    queueCreateInfo.queueCount = 1;
+    queueCreateInfo.pQueuePriorities = &queuePriority;
+
+    VkPhysicalDeviceFeatures deviceFeatures = {0};
+
+    VkDeviceCreateInfo createInfo = {0};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    createInfo.pQueueCreateInfos = &queueCreateInfo;
+    createInfo.queueCreateInfoCount = 1;
+    createInfo.pEnabledFeatures = &deviceFeatures;
+    createInfo.enabledExtensionCount = 0;
+    createInfo.ppEnabledExtensionNames = NULL;
+
+    VkDevice device;
+    VkResult result = vkCreateDevice(vd->physicalDevice, &createInfo, NULL, &device);
+    if (result != VK_SUCCESS) {
+        printf("ERROR: Failed to create logical device\n");
+        return false;
+    }
+
+    vd->device = device;
+    vkGetDeviceQueue(vd->device, vd->videoDecodeQueueIndex, 0, &vd->videoDecodeQueue);
+    return true;
+}
+
 static bool initVideoDecode(struct VideoDecode *vd)
 {
     printf("Creating Vulkan instance...\n");
@@ -93,12 +130,18 @@ static bool initVideoDecode(struct VideoDecode *vd)
         return false;
     }
 
+    printf("Creating logical device...\n");
+    if (!createLogicalDevice(vd)) {
+        return false;
+    }
+
     printf("VideoDecode struct initialized successfully :)\n");
     return true;
 }
 
 static void freeVideoDecode(struct VideoDecode *vd)
 {
+    vkDestroyDevice(vd->device, NULL);
     vkDestroyInstance(vd->instance, NULL);
 }
 
